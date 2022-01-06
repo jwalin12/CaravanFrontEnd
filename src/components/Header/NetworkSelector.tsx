@@ -2,9 +2,10 @@ import { Trans } from '@lingui/macro'
 import { CHAIN_INFO, SupportedChainId } from 'constants/chains'
 import { useOnClickOutside } from 'hooks/useOnClickOutside'
 import useParsedQueryString from 'hooks/useParsedQueryString'
+import usePrevious from 'hooks/usePrevious'
 import { useActiveWeb3React } from 'hooks/web3'
 import { ParsedQs } from 'qs'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { ArrowDownCircle, ChevronDown } from 'react-feather'
 import { useHistory } from 'react-router-dom'
 import { useModalOpen, useToggleModal } from 'state/application/hooks'
@@ -226,7 +227,8 @@ const getParsedChainId = (parsedQs?: ParsedQs) => {
 export default function NetworkSelector() {
   const { chainId, library } = useActiveWeb3React()
   const parsedQs = useParsedQueryString()
-  const [lastNetworkChange, setLastNetworkChange] = useState<number | null>(null)
+  const urlChainId = getParsedChainId(parsedQs)
+  const prevChainId = usePrevious(chainId)
   const node = useRef<HTMLDivElement>()
   const open = useModalOpen(ApplicationModal.NETWORK_SELECTOR)
   const toggle = useToggleModal(ApplicationModal.NETWORK_SELECTOR)
@@ -246,7 +248,7 @@ export default function NetworkSelector() {
           if (!skipToggle) {
             toggle()
           }
-          history.push({ search: replaceURLParam(history.location.search, 'chainId', targetChain.toString()) })
+          history.replace({ search: replaceURLParam(history.location.search, 'chainId', targetChain.toString()) })
         })
         .catch((error) => {
           console.error('Failed to switch networks', error)
@@ -254,7 +256,7 @@ export default function NetworkSelector() {
           // we want app network <-> chainId param to be in sync, so if user changes the network by changing the URL
           // but the request fails, revert the URL back to current chainId
           if (chainId) {
-            history.push({ search: replaceURLParam(history.location.search, 'chainId', chainId.toString()) })
+            history.replace({ search: replaceURLParam(history.location.search, 'chainId', chainId.toString()) })
           }
 
           if (!skipToggle) {
@@ -268,20 +270,20 @@ export default function NetworkSelector() {
   )
 
   useEffect(() => {
-    if (!chainId || lastNetworkChange === chainId) return
-    const newChainId = getParsedChainId(parsedQs)
-
-    if (newChainId && chainId !== newChainId) {
-      handleChainSwitch(newChainId, true)
-      setLastNetworkChange(chainId)
+    // when network change originates from wallet or dropdown selector, just update URL
+    if (chainId && chainId !== prevChainId) {
+      history.replace({ search: replaceURLParam(history.location.search, 'chainId', chainId.toString()) })
+      // otherwise assume network change originates from URL
+    } else if (urlChainId) {
+      handleChainSwitch(urlChainId, true)
     }
-  }, [handleChainSwitch, lastNetworkChange, chainId, parsedQs])
+  }, [chainId, urlChainId, prevChainId, handleChainSwitch, history])
 
   // set chainId parameter on initial load if not there
   useEffect(() => {
-    const newChainId = getParsedChainId(parsedQs)
-    if (chainId && !newChainId) {
-      history.push({ search: replaceURLParam(history.location.search, 'chainId', chainId.toString()) })
+    const urlChainId = getParsedChainId(parsedQs)
+    if (chainId && !urlChainId) {
+      history.replace({ search: replaceURLParam(history.location.search, 'chainId', chainId.toString()) })
     }
   }, [chainId, history, parsedQs])
 
