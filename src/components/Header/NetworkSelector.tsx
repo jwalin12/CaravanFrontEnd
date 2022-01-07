@@ -281,11 +281,10 @@ export default function NetworkSelector() {
 
   // set chainId parameter on initial load if not there
   useEffect(() => {
-    const urlChainId = getParsedChainId(parsedQs)
     if (chainId && !urlChainId) {
       history.replace({ search: replaceURLParam(history.location.search, 'chainId', chainId.toString()) })
     }
-  }, [chainId, history, parsedQs])
+  }, [chainId, history, urlChainId])
 
   if (!chainId || !info || !library) {
     return null
