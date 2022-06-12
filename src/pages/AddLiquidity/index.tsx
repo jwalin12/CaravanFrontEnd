@@ -1,9 +1,9 @@
 import { Trans } from '@lingui/macro'
-import { Currency, CurrencyAmount, Percent } from '@uniswap/sdk-core'
+import { Currency, CurrencyAmount, Percent, Price } from '@uniswap/sdk-core'
 import { FeeAmount, NonfungiblePositionManager } from '@uniswap/v3-sdk'
 import UnsupportedCurrencyFooter from 'components/swap/UnsupportedCurrencyFooter'
 import type { providers } from 'ethers'
-import { BigNumber } from 'ethers'
+import { BigNumber, ethers } from 'ethers'
 import { useCallback, useContext, useEffect, useState } from 'react'
 import { AlertTriangle } from 'react-feather'
 import ReactGA from 'react-ga'
@@ -16,7 +16,6 @@ import {
   useV3MintState,
 } from 'state/mint/v3/hooks'
 import { ThemeContext } from 'styled-components/macro'
-
 import { ButtonError, ButtonLight, ButtonPrimary, ButtonText, ButtonYellow } from '../../components/Button'
 import { BlueCard, OutlineCard, YellowCard } from '../../components/Card'
 import { AutoColumn } from '../../components/Column'
@@ -32,7 +31,7 @@ import RateToggle from '../../components/RateToggle'
 import Row, { AutoRow, RowBetween, RowFixed } from '../../components/Row'
 import { SwitchLocaleLink } from '../../components/SwitchLocaleLink'
 import TransactionConfirmationModal, { ConfirmationModalContent } from '../../components/TransactionConfirmationModal'
-import { NONFUNGIBLE_POSITION_MANAGER_ADDRESSES } from '../../constants/addresses'
+import { NONFUNGIBLE_POSITION_MANAGER_ADDRESSES, CARAVAN_ROUTER_ADDRESSES } from '../../constants/addresses'
 import { ZERO_PERCENT } from '../../constants/misc'
 import { WRAPPED_NATIVE_CURRENCY } from '../../constants/tokens'
 import { useCurrency } from '../../hooks/Tokens'
@@ -71,6 +70,7 @@ import {
   StyledInput,
   Wrapper,
 } from './styled'
+import rentRouterABI from '../../abis/CaravanRentRouter01.json'
 
 const DEFAULT_ADD_IN_RANGE_SLIPPAGE_TOLERANCE = new Percent(50, 10_000)
 
@@ -145,6 +145,11 @@ export default function AddLiquidity({
   const [showConfirm, setShowConfirm] = useState<boolean>(false)
   const [attemptingTxn, setAttemptingTxn] = useState<boolean>(false) // clicked confirm
 
+  
+  // CARAVAN NEW SHIT HERE
+  const [rentalDuration, setRentalDuration] = useState<number>(3600)
+
+
   // capital efficiency warning
   const [showCapitalEfficiencyWarning, setShowCapitalEfficiencyWarning] = useState(false)
 
@@ -211,94 +216,137 @@ export default function AddLiquidity({
     }
 
     if (position && account && deadline) {
-      const useNative = baseCurrency.isNative ? baseCurrency : quoteCurrency.isNative ? quoteCurrency : undefined
-      const { calldata, value } =
-        hasExistingPosition && tokenId
-          ? NonfungiblePositionManager.addCallParameters(position, {
-              tokenId,
-              slippageTolerance: allowedSlippage,
-              deadline: deadline.toString(),
-              useNative,
-            })
-          : NonfungiblePositionManager.addCallParameters(position, {
-              slippageTolerance: allowedSlippage,
-              recipient: account,
-              deadline: deadline.toString(),
-              useNative,
-              createPool: noLiquidity,
-            })
+      const price = position.pool.priceOf(position.pool.token0)
 
-      let txn: { to: string; data: string; value: string } = {
-        to: NONFUNGIBLE_POSITION_MANAGER_ADDRESSES[chainId],
-        data: calldata,
-        value,
+      const PRECISION = 18
+      const PRECISE_UNIT = 10**PRECISION
+
+      const toDecimal = (ob: any) => {
+        return parseFloat(ob.toSignificant(PRECISION))
       }
 
-      if (argentWalletContract) {
-        const amountA = parsedAmounts[Field.CURRENCY_A]
-        const amountB = parsedAmounts[Field.CURRENCY_B]
-        const batch = [
-          ...(amountA && amountA.currency.isToken
-            ? [approveAmountCalldata(amountA, NONFUNGIBLE_POSITION_MANAGER_ADDRESSES[chainId])]
-            : []),
-          ...(amountB && amountB.currency.isToken
-            ? [approveAmountCalldata(amountB, NONFUNGIBLE_POSITION_MANAGER_ADDRESSES[chainId])]
-            : []),
-          {
-            to: txn.to,
-            data: txn.data,
-            value: txn.value,
-          },
-        ]
-        const data = argentWalletContract.interface.encodeFunctionData('wc_multiCall', [batch])
-        txn = {
-          to: argentWalletContract.address,
-          data,
-          value: '0x0',
-        }
+      const priceLower = toDecimal(position.token0PriceLower) * PRECISE_UNIT
+      const priceUpper = toDecimal(position.token0PriceUpper) * PRECISE_UNIT
+      const amount0 = toDecimal(position.amount0) * PRECISE_UNIT
+      const amount1 = toDecimal(position.amount1) * PRECISE_UNIT
+      console.log(position)
+      
+      const rentRouterAddress = CARAVAN_ROUTER_ADDRESSES[chainId];
+      const caravanRentRouter = new ethers.Contract(
+        rentRouterAddress,
+        rentRouterABI,
+        library
+      )
+      const buyRentalParams = {
+        tickUpper: position.tickUpper,
+        tickLower: position.tickLower,
+        fee: position.pool.fee,
+        duration: rentalDuration,
+        priceMax: priceUpper.toString(),
+        token0: position.pool.token0.address,
+        token1: position.pool.token1.address,
+        amount0Desired: amount0.toString(),
+        amount1Desired: amount1.toString(),
+        amount0Min: amount0.toString(),
+        amount1Min: amount1.toString(),
+        deadline: deadline
       }
+      console.log(buyRentalParams)
+      const quotedPriceEth = await caravanRentRouter.quoteRental(buyRentalParams)
+      console.log("Got quoted price: ", quotedPriceEth.toString())
 
-      setAttemptingTxn(true)
+      //FIXME There is a bug when the quantity of token1 = 0 (for ETH/UNI pair, position only ETH), gives quotedPrice = 0
 
-      library
-        .getSigner()
-        .estimateGas(txn)
-        .then((estimate) => {
-          const newTxn = {
-            ...txn,
-            gasLimit: calculateGasMargin(estimate),
-          }
+      return;
 
-          return library
-            .getSigner()
-            .sendTransaction(newTxn)
-            .then((response: providers.TransactionResponse) => {
-              setAttemptingTxn(false)
-              addTransaction(response, {
-                type: TransactionType.ADD_LIQUIDITY_V3_POOL,
-                baseCurrencyId: currencyId(baseCurrency),
-                quoteCurrencyId: currencyId(quoteCurrency),
-                createPool: Boolean(noLiquidity),
-                expectedAmountBaseRaw: parsedAmounts[Field.CURRENCY_A]?.quotient?.toString() ?? '0',
-                expectedAmountQuoteRaw: parsedAmounts[Field.CURRENCY_B]?.quotient?.toString() ?? '0',
-                feeAmount: position.pool.fee,
-              })
-              setTxHash(response.hash)
-              ReactGA.event({
-                category: 'Liquidity',
-                action: 'Add',
-                label: [currencies[Field.CURRENCY_A]?.symbol, currencies[Field.CURRENCY_B]?.symbol].join('/'),
-              })
-            })
-        })
-        .catch((error) => {
-          console.error('Failed to send transaction', error)
-          setAttemptingTxn(false)
-          // we only care if the error is something _other_ than the user rejected the tx
-          if (error?.code !== 4001) {
-            console.error(error)
-          }
-        })
+    //   const useNative = baseCurrency.isNative ? baseCurrency : quoteCurrency.isNative ? quoteCurrency : undefined
+    //   const { calldata, value } =
+    //     hasExistingPosition && tokenId
+    //       ? NonfungiblePositionManager.addCallParameters(position, {
+    //           tokenId,
+    //           slippageTolerance: allowedSlippage,
+    //           deadline: deadline.toString(),
+    //           useNative,
+    //         })
+    //       : NonfungiblePositionManager.addCallParameters(position, {
+    //           slippageTolerance: allowedSlippage,
+    //           recipient: account,
+    //           deadline: deadline.toString(),
+    //           useNative,
+    //           createPool: noLiquidity,
+    //         })
+
+    //   let txn: { to: string; data: string; value: string } = {
+    //     to: NONFUNGIBLE_POSITION_MANAGER_ADDRESSES[chainId],
+    //     data: calldata,
+    //     value,
+    //   }
+
+    //   if (argentWalletContract) {
+    //     const amountA = parsedAmounts[Field.CURRENCY_A]
+    //     const amountB = parsedAmounts[Field.CURRENCY_B]
+    //     const batch = [
+    //       ...(amountA && amountA.currency.isToken
+    //         ? [approveAmountCalldata(amountA, NONFUNGIBLE_POSITION_MANAGER_ADDRESSES[chainId])]
+    //         : []),
+    //       ...(amountB && amountB.currency.isToken
+    //         ? [approveAmountCalldata(amountB, NONFUNGIBLE_POSITION_MANAGER_ADDRESSES[chainId])]
+    //         : []),
+    //       {
+    //         to: txn.to,
+    //         data: txn.data,
+    //         value: txn.value,
+    //       },
+    //     ]
+    //     const data = argentWalletContract.interface.encodeFunctionData('wc_multiCall', [batch])
+    //     txn = {
+    //       to: argentWalletContract.address,
+    //       data,
+    //       value: '0x0',
+    //     }
+    //   }
+
+    //   setAttemptingTxn(true)
+
+    //   library
+    //     .getSigner()
+    //     .estimateGas(txn)
+    //     .then((estimate) => {
+    //       const newTxn = {
+    //         ...txn,
+    //         gasLimit: calculateGasMargin(estimate),
+    //       }
+
+    //       return library
+    //         .getSigner()
+    //         .sendTransaction(newTxn)
+    //         .then((response: providers.TransactionResponse) => {
+    //           setAttemptingTxn(false)
+    //           addTransaction(response, {
+    //             type: TransactionType.ADD_LIQUIDITY_V3_POOL,
+    //             baseCurrencyId: currencyId(baseCurrency),
+    //             quoteCurrencyId: currencyId(quoteCurrency),
+    //             createPool: Boolean(noLiquidity),
+    //             expectedAmountBaseRaw: parsedAmounts[Field.CURRENCY_A]?.quotient?.toString() ?? '0',
+    //             expectedAmountQuoteRaw: parsedAmounts[Field.CURRENCY_B]?.quotient?.toString() ?? '0',
+    //             feeAmount: position.pool.fee,
+    //           })
+    //           setTxHash(response.hash)
+    //           ReactGA.event({
+    //             category: 'Liquidity',
+    //             action: 'Add',
+    //             label: [currencies[Field.CURRENCY_A]?.symbol, currencies[Field.CURRENCY_B]?.symbol].join('/'),
+    //           })
+    //         })
+    //     })
+    //     .catch((error) => {
+    //       console.error('Failed to send transaction', error)
+    //       setAttemptingTxn(false)
+    //       // we only care if the error is something _other_ than the user rejected the tx
+    //       if (error?.code !== 4001) {
+    //         console.error(error)
+    //       }
+    //     })
     } else {
       return
     }
@@ -466,7 +514,7 @@ export default function AddLiquidity({
           }
           error={!isValid && !!parsedAmounts[Field.CURRENCY_A] && !!parsedAmounts[Field.CURRENCY_B]}
         >
-          <Text fontWeight={500}>{errorMessage ? errorMessage : <Trans>Preview</Trans>}</Text>
+          <Text fontWeight={500}>{errorMessage ? errorMessage : <Trans>Preview deez</Trans>}</Text>
         </ButtonError>
       </AutoColumn>
     )
@@ -492,12 +540,13 @@ export default function AddLiquidity({
                   priceUpper={priceUpper}
                   outOfRange={outOfRange}
                   ticksAtLimit={ticksAtLimit}
+                  rentalDurationSecs={rentalDuration}
                 />
               )}
               bottomContent={() => (
                 <ButtonPrimary style={{ marginTop: '1rem' }} onClick={onAdd}>
                   <Text fontWeight={500} fontSize={20}>
-                    <Trans>Add</Trans>
+                    <Trans>Add deez nuts</Trans>
                   </Text>
                 </ButtonPrimary>
               )}
@@ -639,6 +688,19 @@ export default function AddLiquidity({
                       showCommonBases
                       locked={depositBDisabled}
                     />
+
+                    <ThemedText.Label>
+                      <Trans>Rental Duration (seconds)</Trans>
+                    </ThemedText.Label>
+
+                    <OutlineCard padding="12px">
+                      <StyledInput
+                        className="start-price-input"
+                        value={rentalDuration}
+                        onUserInput={(input) => setRentalDuration(input ? parseInt(input) : 0)}
+                        type="number"
+                      />
+                    </OutlineCard>
                   </AutoColumn>
                 </DynamicSection>
               </div>

@@ -2,6 +2,7 @@ import { Currency, CurrencyAmount, Price } from '@uniswap/sdk-core'
 import { Position } from '@uniswap/v3-sdk'
 import { AutoColumn } from 'components/Column'
 import { PositionPreview } from 'components/PositionPreview'
+import { RentalPreview } from 'components/RentalPreview'
 import styled from 'styled-components/macro'
 
 import { Bound, Field } from '../../state/mint/v3/actions'
@@ -14,7 +15,9 @@ export function Review({
   position,
   outOfRange,
   ticksAtLimit,
+  rentalDurationSecs
 }: {
+  rentalDurationSecs?: number
   position?: Position
   existingPosition?: Position
   parsedAmounts: { [field in Field]?: CurrencyAmount<Currency> }
@@ -26,14 +29,24 @@ export function Review({
   return (
     <Wrapper>
       <AutoColumn gap="lg">
-        {position ? (
-          <PositionPreview
-            position={position}
-            inRange={!outOfRange}
-            ticksAtLimit={ticksAtLimit}
-            title={'Selected Range'}
-          />
-        ) : null}
+        {position ? rentalDurationSecs ? (
+          <RentalPreview
+              position={position}
+              inRange={!outOfRange}
+              ticksAtLimit={ticksAtLimit}
+              title={'Selected Range'}
+              rentalDurationSecs={rentalDurationSecs}
+            />
+        ) : 
+          (
+            <PositionPreview
+              position={position}
+              inRange={!outOfRange}
+              ticksAtLimit={ticksAtLimit}
+              title={'Selected Range'}
+            />
+          )
+         : null}
       </AutoColumn>
     </Wrapper>
   )

@@ -278,8 +278,9 @@ export default function Header() {
         </UniIcon>
       </Title>
       <HeaderLinks>
-        <StyledNavLink id={`swap-nav-link`} to={'/swap'}>
-          <Trans>Swap</Trans>
+        <StyledNavLink id={`swap-nav-link`} to="/add/ETH"> 
+        {/* to={'/swap'} */}
+          <Trans>Rent</Trans>
         </StyledNavLink>
         <StyledNavLink
           id={`pool-nav-link`}
@@ -294,7 +295,7 @@ export default function Header() {
         >
           <Trans>Pool</Trans>
         </StyledNavLink>
-        {(!chainId || chainId === SupportedChainId.MAINNET) && (
+        {/* {(!chainId || chainId === SupportedChainId.MAINNET) && (
           <StyledNavLink id={`vote-nav-link`} to={'/vote'}>
             <Trans>Vote</Trans>
           </StyledNavLink>
@@ -302,7 +303,7 @@ export default function Header() {
         <StyledExternalLink id={`charts-nav-link`} href={infoLink}>
           <Trans>Charts</Trans>
           <sup>↗</sup>
-        </StyledExternalLink>
+        </StyledExternalLink> */}
       </HeaderLinks>
 
       <HeaderControls>

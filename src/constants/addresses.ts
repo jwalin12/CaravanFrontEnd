@@ -107,3 +107,7 @@ export const V3_MIGRATOR_ADDRESSES: AddressMap = constructSameAddressMap('0xA564
   SupportedChainId.POLYGON_MUMBAI,
   SupportedChainId.POLYGON,
 ])
+
+export const CARAVAN_ROUTER_ADDRESSES: AddressMap = {
+  [SupportedChainId.RINKEBY]: '0x65934E6C1142ADA84b309632E63D969b01ab1d08',
+}

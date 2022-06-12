@@ -325,7 +325,7 @@ export default function FullPositionCard({ pair, border, stakedBalance }: Positi
                   to={`/add/v2/${currencyId(currency0)}/${currencyId(currency1)}`}
                   width="32%"
                 >
-                  <Trans>Add</Trans>
+                  <Trans>Add deez</Trans>
                 </ButtonPrimary>
                 <ButtonPrimary
                   padding="8px"
