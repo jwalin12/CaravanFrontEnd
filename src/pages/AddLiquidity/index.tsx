@@ -242,7 +242,7 @@ export default function AddLiquidity({
         tickLower: position.tickLower,
         fee: position.pool.fee,
         duration: rentalDuration,
-        priceMax: priceUpper.toString(),
+        priceMax: deadline,//BigNumber.from(2).pow(256).sub(1).toString(),
         token0: position.pool.token0.address,
         token1: position.pool.token1.address,
         amount0Desired: amount0.toString(),
@@ -255,7 +255,7 @@ export default function AddLiquidity({
       const quotedPriceEth = await caravanRentRouter.quoteRental(buyRentalParams)
       console.log("Got quoted price: ", quotedPriceEth.toString())
 
-      //FIXME There is a bug when the quantity of token1 = 0 (for ETH/UNI pair, position only ETH), gives quotedPrice = 0
+      //TODO There is a bug when the quantity of one of token0 or token1 = 0, then gives quotedPrice = 0 <=> if position is out of range, quotedPrice = 0
 
       return;
 

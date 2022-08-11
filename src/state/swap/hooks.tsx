@@ -103,6 +103,7 @@ export function useDerivedSwapInfo(): {
     state: TradeState
   }
   allowedSlippage: Percent
+  caravanIsInvalid: boolean
 } {
   const { account } = useActiveWeb3React()
 
@@ -168,6 +169,8 @@ export function useDerivedSwapInfo(): {
     }
   }
 
+  const caravanIsInvalid = !account || !currencies[Field.INPUT] || !parsedAmount 
+
   const allowedSlippage = useSwapSlippageTolerance(trade.trade ?? undefined)
 
   // compare input balance to max input based on version
@@ -184,6 +187,7 @@ export function useDerivedSwapInfo(): {
     inputError,
     trade,
     allowedSlippage,
+    caravanIsInvalid
   }
 }
 

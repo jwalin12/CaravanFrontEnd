@@ -109,5 +109,5 @@ export const V3_MIGRATOR_ADDRESSES: AddressMap = constructSameAddressMap('0xA564
 ])
 
 export const CARAVAN_ROUTER_ADDRESSES: AddressMap = {
-  [SupportedChainId.RINKEBY]: '0x65934E6C1142ADA84b309632E63D969b01ab1d08',
+  [SupportedChainId.RINKEBY]: '0xC5839332DacDa591F09ba5d454BAFBCc82f1F139',
 }
