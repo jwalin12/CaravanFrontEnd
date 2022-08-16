@@ -284,13 +284,13 @@ export default function Header() {
         </StyledNavLink>
         <StyledNavLink
           id={`pool-nav-link`}
-          to={'/pool'}
+          to={'/caravan/add'}
           isActive={(match, { pathname }) =>
             Boolean(match) ||
             pathname.startsWith('/add') ||
             pathname.startsWith('/remove') ||
             pathname.startsWith('/increase') ||
-            pathname.startsWith('/find')
+            pathname.startsWith('/caravan')
           }
         >
           <Trans>Pool</Trans>

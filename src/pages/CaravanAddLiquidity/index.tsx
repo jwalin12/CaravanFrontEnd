@@ -31,9 +31,9 @@ import SwapHeader from '../../components/swap/SwapHeader'
 import { SwitchLocaleLink } from '../../components/SwitchLocaleLink'
 import TokenWarningModal from '../../components/TokenWarningModal'
 import { useAllTokens, useCurrency } from '../../hooks/Tokens'
-import { ApprovalState, useApprovalOptimizedTrade, useApproveCallbackFromTrade } from '../../hooks/useApproveCallback'
+import { ApprovalState, useApprovalOptimizedTrade, useApproveCallback, useApproveCallbackFromTrade } from '../../hooks/useApproveCallback'
 import useENSAddress from '../../hooks/useENSAddress'
-import { useERC20PermitFromTrade, UseERC20PermitState } from '../../hooks/useERC20Permit'
+import { useERC20Permit, useERC20PermitFromTrade, UseERC20PermitState } from '../../hooks/useERC20Permit'
 import useIsArgentWallet from '../../hooks/useIsArgentWallet'
 import { useIsSwapUnsupported } from '../../hooks/useIsSwapUnsupported'
 import { useSwapCallback } from '../../hooks/useSwapCallback'
@@ -371,41 +371,81 @@ export default function Swap({ history }: RouteComponentProps) {
     [onCurrencySelection]
   )
 
+  const permit = useERC20Permit(parsedAmounts[Field.INPUT], chainId ? CARAVAN_ROUTER_ADDRESSES[chainId] : null, null)
+  const approve = useApproveCallback(parsedAmounts[Field.INPUT], chainId ? CARAVAN_ROUTER_ADDRESSES[chainId] : undefined)
+
+  const handleApproveASDF = useCallback(async () => {
+    if (permit.state === UseERC20PermitState.NOT_SIGNED && permit.gatherPermitSignature) {
+      try {
+        await permit.gatherPermitSignature()
+      } catch (error) {
+        // try to approve if gatherPermitSignature failed for any reason other than the user rejecting it
+        if (error?.code !== 4001) {
+          await approveCallback()
+        }
+      }
+    } else {
+      await approveCallback()
+
+      ReactGA.event({
+        category: 'Swap',
+        action: 'Approve',
+        label: [approvalOptimizedTradeString, approvalOptimizedTrade?.inputAmount?.currency.symbol].join('/'),
+      })
+    }
+  }, [
+    signatureState,
+    gatherPermitSignature,
+    approveCallback,
+    approvalOptimizedTradeString,
+    approvalOptimizedTrade?.inputAmount?.currency.symbol,
+  ])
+
   const onAddCaravanLiquidity = useCallback(
     async () => {
-        if (!chainId || !library || !account || !currencies[Field.INPUT]) return
+        if (!chainId || !library || !account || !currencies[Field.INPUT] || !parsedAmounts[Field.INPUT] || caravanIsInvalid) return
 
         const rentRouterAddress = CARAVAN_ROUTER_ADDRESSES[chainId]
+        const signer = library.getSigner()
         const caravanRentRouter = new ethers.Contract(
             rentRouterAddress,
             rentRouterABI,
-            library
+            signer
           )
 
         const blockNumber = await library.getBlockNumber()
         const block = await library.getBlock(blockNumber)
         const deadline = block.timestamp + 864000
 
+        const ethAmount = parsedAmounts[Field.INPUT]?.toExact()
+        console.log(parsedAmounts[Field.INPUT]?.decimalScale)
+        if (!ethAmount) return
+
         if (currencies[Field.INPUT]?.isNative) {
             // call add eth liquidity
+            console.log("Adding ETH Liquidity")
             await caravanRentRouter.addLiquidityETH(
-                ethers.utils.parseEther('10'), 
+                ethers.utils.parseEther(ethAmount), 
                 ethers.utils.parseEther('0'),
                 account, 
                 ethers.BigNumber.from(deadline),
-                { value: ethers.utils.parseEther('11') }
+                { value: ethers.utils.parseEther(ethAmount) }
             )            
-        } else if (currencies[Field.INPUT] instanceof Token) {
+        } else {
             // call normal add liquidity
+            // console.log("Approving ERC20 spend")
+            // await handleApprove()
+            console.log("Adding ERC20 Liquidity")
             await caravanRentRouter.addLiquidity(
-                currencies[Field.INPUT]?.address,
-                ethers.utils.parseEther("10"), 
+                currencies[Field.INPUT]?.wrapped.address,
+                ethers.utils.parseEther(ethAmount), 
                 ethers.utils.parseEther('0'), 
                 account,  
                 ethers.BigNumber.from(deadline));
         }
+        console.log("Finished adding liquidity")
         // TODO: fix this function
-    }, []
+    }, [chainId, library, account, currencies, parsedAmounts, caravanIsInvalid]
   )
 
   const swapIsUnsupported = useIsSwapUnsupported(currencies[Field.INPUT], currencies[Field.OUTPUT])
