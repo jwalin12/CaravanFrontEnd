@@ -1,6 +1,6 @@
 import { Trans } from '@lingui/macro'
 import { Trade } from '@uniswap/router-sdk'
-import { Currency, CurrencyAmount, Token, TradeType } from '@uniswap/sdk-core'
+import { NativeCurrency, Currency, CurrencyAmount, Token, TradeType } from '@uniswap/sdk-core'
 import { Trade as V2Trade } from '@uniswap/v2-sdk'
 import { Trade as V3Trade } from '@uniswap/v3-sdk'
 import { NetworkAlert } from 'components/NetworkAlert/NetworkAlert'
@@ -394,9 +394,8 @@ export default function Swap({ history }: RouteComponentProps) {
                 account, 
                 ethers.BigNumber.from(deadline),
                 { value: ethers.utils.parseEther('11') }
-            )
-            
-        } else {
+            )            
+        } else if (currencies[Field.INPUT] instanceof Token) {
             // call normal add liquidity
             await caravanRentRouter.addLiquidity(
                 currencies[Field.INPUT]?.address,
