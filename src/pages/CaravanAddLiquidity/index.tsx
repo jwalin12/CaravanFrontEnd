@@ -372,33 +372,24 @@ export default function Swap({ history }: RouteComponentProps) {
   )
 
   const permit = useERC20Permit(parsedAmounts[Field.INPUT], chainId ? CARAVAN_ROUTER_ADDRESSES[chainId] : null, null)
-  const approve = useApproveCallback(parsedAmounts[Field.INPUT], chainId ? CARAVAN_ROUTER_ADDRESSES[chainId] : undefined)
-
-  const handleApproveASDF = useCallback(async () => {
+  const [caravanApproveState, caravanApproveCallback] = useApproveCallback(parsedAmounts[Field.INPUT], chainId ? CARAVAN_ROUTER_ADDRESSES[chainId] : undefined)
+  
+  const handleCaravanApprove = useCallback(async () => {
     if (permit.state === UseERC20PermitState.NOT_SIGNED && permit.gatherPermitSignature) {
       try {
         await permit.gatherPermitSignature()
       } catch (error) {
         // try to approve if gatherPermitSignature failed for any reason other than the user rejecting it
         if (error?.code !== 4001) {
-          await approveCallback()
+          await caravanApproveCallback()
         }
       }
-    } else {
-      await approveCallback()
-
-      ReactGA.event({
-        category: 'Swap',
-        action: 'Approve',
-        label: [approvalOptimizedTradeString, approvalOptimizedTrade?.inputAmount?.currency.symbol].join('/'),
-      })
+      return
     }
+    await caravanApproveCallback()
   }, [
-    signatureState,
-    gatherPermitSignature,
-    approveCallback,
-    approvalOptimizedTradeString,
-    approvalOptimizedTrade?.inputAmount?.currency.symbol,
+    permit,
+    caravanApproveCallback,
   ])
 
   const onAddCaravanLiquidity = useCallback(
@@ -433,8 +424,8 @@ export default function Swap({ history }: RouteComponentProps) {
             )            
         } else {
             // call normal add liquidity
-            // console.log("Approving ERC20 spend")
-            // await handleApprove()
+            console.log("Approving ERC20 spend")
+            await handleCaravanApprove()
             console.log("Adding ERC20 Liquidity")
             await caravanRentRouter.addLiquidity(
                 currencies[Field.INPUT]?.wrapped.address,
@@ -490,8 +481,9 @@ export default function Swap({ history }: RouteComponentProps) {
               </>
             ) : null}
             <div>
-            <ButtonPrimary disabled={caravanIsInvalid} onClick={onAddCaravanLiquidity}>
+            <ButtonPrimary disabled={caravanIsInvalid || caravanApproveState === ApprovalState.PENDING} onClick={onAddCaravanLiquidity}>
                   <ThemedText.Main mb="4px">
+                    {caravanApproveState === ApprovalState.APPROVED && (<></>)}
                     <Trans>Add Caravan Liquidity</Trans>
                   </ThemedText.Main>
                 </ButtonPrimary>
