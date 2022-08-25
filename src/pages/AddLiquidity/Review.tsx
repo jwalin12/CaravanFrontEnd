@@ -15,9 +15,11 @@ export function Review({
   position,
   outOfRange,
   ticksAtLimit,
-  rentalDurationSecs
+  rentalDurationSecs,
+  rentalPriceInEth
 }: {
   rentalDurationSecs?: number
+  rentalPriceInEth?: string
   position?: Position
   existingPosition?: Position
   parsedAmounts: { [field in Field]?: CurrencyAmount<Currency> }
@@ -36,6 +38,7 @@ export function Review({
               ticksAtLimit={ticksAtLimit}
               title={'Selected Range'}
               rentalDurationSecs={rentalDurationSecs}
+              rentalPriceInEth={rentalPriceInEth}
             />
         ) : 
           (

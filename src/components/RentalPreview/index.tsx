@@ -1,5 +1,6 @@
 import { Trans } from '@lingui/macro'
 import { Currency } from '@uniswap/sdk-core'
+import { ChainId } from '@uniswap/smart-order-router'
 import { Position } from '@uniswap/v3-sdk'
 import RangeBadge from 'components/Badge/RangeBadge'
 import { LightCard } from 'components/Card'
@@ -9,6 +10,8 @@ import DoubleCurrencyLogo from 'components/DoubleLogo'
 import { Break } from 'components/earn/styled'
 import RateToggle from 'components/RateToggle'
 import { RowBetween, RowFixed } from 'components/Row'
+import { WRAPPED_NATIVE_CURRENCY, nativeOnChain } from 'constants/tokens'
+import useUSDCPrice from 'hooks/useUSDCPrice'
 import JSBI from 'jsbi'
 import { ReactNode, useCallback, useContext, useState } from 'react'
 import { Bound } from 'state/mint/v3/actions'
@@ -17,15 +20,20 @@ import { ThemedText } from 'theme'
 import { formatTickPrice } from 'utils/formatTickPrice'
 import { unwrappedToken } from 'utils/unwrappedToken'
 
+const WETH = WRAPPED_NATIVE_CURRENCY[ChainId.MAINNET]
+const ETH = nativeOnChain(ChainId.MAINNET)
+
 export const RentalPreview = ({
   position,
   title,
   inRange,
   baseCurrencyDefault,
   ticksAtLimit,
-  rentalDurationSecs
+  rentalDurationSecs,
+  rentalPriceInEth
 }: {
   rentalDurationSecs: number
+  rentalPriceInEth?: string
   position: Position
   title?: ReactNode
   inRange: boolean
@@ -33,6 +41,10 @@ export const RentalPreview = ({
   ticksAtLimit: { [bound: string]: boolean | undefined }
 }) => {
   const theme = useContext(ThemeContext)
+  const ethPrice = useUSDCPrice(ETH)
+  const rentalPriceInUSDC = rentalPriceInEth && ethPrice ? parseFloat(rentalPriceInEth) * parseFloat(ethPrice.toSignificant(5)) : undefined
+  // console.log({ ETH, ethPrice, rentalPriceInEth })
+
 
   const currency0 = unwrappedToken(position.pool.token0)
   const currency1 = unwrappedToken(position.pool.token1)
@@ -187,6 +199,25 @@ export const RentalPreview = ({
               <Trans>
                 {rentalDurationSecs} seconds
               </Trans>
+            </ThemedText.Main>
+          </AutoColumn>
+        </LightCard>
+        <LightCard padding="12px ">
+          <AutoColumn gap="4px" justify="center">
+            <ThemedText.Main fontSize="12px">
+              <Trans>Rental Price</Trans>
+            </ThemedText.Main>
+            <ThemedText.MediumHeader>{rentalPriceInEth ? `${parseFloat(rentalPriceInEth).toFixed(5)} ETH` : 'Fetching price quote...'}</ThemedText.MediumHeader>
+            <ThemedText.Main textAlign="center" fontSize="12px">
+              { rentalPriceInEth && ethPrice ? (
+                <Trans>
+                  {rentalPriceInUSDC?.toFixed(2)} USD
+                </Trans>
+              ) : 
+                <Trans>
+                  Fetching USD price...
+                </Trans>
+              }
             </ThemedText.Main>
           </AutoColumn>
         </LightCard>

@@ -57,6 +57,7 @@ import AppBody from '../AppBody'
 import rentRouterABI from '../../abis/CaravanRentRouter01.json'
 import { CARAVAN_ROUTER_ADDRESSES } from '../../constants/addresses'
 import { BigNumber, ethers } from 'ethers'
+import { useTokenContract } from 'hooks/useContract'
 
 const AlertWrapper = styled.div`
   max-width: 460px;
@@ -392,6 +393,9 @@ export default function Swap({ history }: RouteComponentProps) {
     caravanApproveCallback,
   ])
 
+  const token = parsedAmounts[Field.INPUT]?.currency?.isToken ? parsedAmounts[Field.INPUT]?.currency : undefined
+  const tokenContract = useTokenContract((token as any)?.address)
+
   const onAddCaravanLiquidity = useCallback(
     async () => {
         if (!chainId || !library || !account || !currencies[Field.INPUT] || !parsedAmounts[Field.INPUT] || caravanIsInvalid) return
@@ -426,13 +430,15 @@ export default function Swap({ history }: RouteComponentProps) {
             // call normal add liquidity
             console.log("Approving ERC20 spend")
             await handleCaravanApprove()
+            await tokenContract?.connect(signer).approve(rentRouterAddress, ethers.utils.parseEther(ethAmount))
             console.log("Adding ERC20 Liquidity")
             await caravanRentRouter.addLiquidity(
                 currencies[Field.INPUT]?.wrapped.address,
                 ethers.utils.parseEther(ethAmount), 
                 ethers.utils.parseEther('0'), 
                 account,  
-                ethers.BigNumber.from(deadline));
+                ethers.BigNumber.from(deadline), 
+                { gasLimit: 1e7 });
         }
         console.log("Finished adding liquidity")
         // TODO: fix this function

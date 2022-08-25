@@ -31,7 +31,7 @@ import RateToggle from '../../components/RateToggle'
 import Row, { AutoRow, RowBetween, RowFixed } from '../../components/Row'
 import { SwitchLocaleLink } from '../../components/SwitchLocaleLink'
 import TransactionConfirmationModal, { ConfirmationModalContent } from '../../components/TransactionConfirmationModal'
-import { NONFUNGIBLE_POSITION_MANAGER_ADDRESSES, CARAVAN_ROUTER_ADDRESSES } from '../../constants/addresses'
+import { NONFUNGIBLE_POSITION_MANAGER_ADDRESSES, CARAVAN_ROUTER_ADDRESSES, CARAVAN_RENT_POOL_FACTORY_ADDRESSES } from '../../constants/addresses'
 import { ZERO_PERCENT } from '../../constants/misc'
 import { WRAPPED_NATIVE_CURRENCY } from '../../constants/tokens'
 import { useCurrency } from '../../hooks/Tokens'
@@ -71,6 +71,7 @@ import {
   Wrapper,
 } from './styled'
 import rentRouterABI from '../../abis/CaravanRentRouter01.json'
+import rentPoolFactoryABI from '../../abis/CaravanRentPoolFactory.json'
 
 const DEFAULT_ADD_IN_RANGE_SLIPPAGE_TOLERANCE = new Percent(50, 10_000)
 
@@ -208,7 +209,9 @@ export default function AddLiquidity({
     outOfRange ? ZERO_PERCENT : DEFAULT_ADD_IN_RANGE_SLIPPAGE_TOLERANCE
   )
 
-  async function onAdd() {
+  const [quotedRentalPrice, setQuotedRentalPrice] = useState<string>()
+
+  async function getQuotedRentalPrice() {
     if (!chainId || !library || !account) return
 
     if (!positionManager || !baseCurrency || !quoteCurrency) {
@@ -252,11 +255,71 @@ export default function AddLiquidity({
         deadline: deadline
       }
       console.log(buyRentalParams)
-      const quotedPriceEth = await caravanRentRouter.quoteRental(buyRentalParams)
-      console.log("Got quoted price: ", quotedPriceEth.toString())
+      const quotedPriceInWei = await caravanRentRouter.quoteRental(buyRentalParams)
+      const quotedPriceInEth = ethers.utils.formatEther(quotedPriceInWei.toString())
+      console.log("Got quoted price in ETH: ", quotedPriceInEth)
+      setQuotedRentalPrice(quotedPriceInEth)
+    }
+  }
 
-      //TODO There is a bug when the quantity of one of token0 or token1 = 0, then gives quotedPrice = 0 <=> if position is out of range, quotedPrice = 0
+  async function onAdd() {
+    if (!chainId || !library || !account) return
 
+    if (!positionManager || !baseCurrency || !quoteCurrency) {
+      return
+    }
+
+    if (position && account && deadline && quotedRentalPrice) {
+      const signer = library.getSigner()
+      const price = position.pool.priceOf(position.pool.token0)
+
+      const PRECISION = 18
+      const PRECISE_UNIT = 10**PRECISION
+
+      const toDecimal = (ob: any) => {
+        return parseFloat(ob.toSignificant(PRECISION))
+      }
+
+      const priceLower = toDecimal(position.token0PriceLower) * PRECISE_UNIT
+      const priceUpper = toDecimal(position.token0PriceUpper) * PRECISE_UNIT
+      const amount0 = toDecimal(position.amount0) * PRECISE_UNIT
+      const amount1 = toDecimal(position.amount1) * PRECISE_UNIT
+      console.log(position)
+      
+      const rentRouterAddress = CARAVAN_ROUTER_ADDRESSES[chainId];
+      const caravanRentRouter = new ethers.Contract(
+        rentRouterAddress,
+        rentRouterABI,
+        library
+      )
+      const quotedPriceInWei = ethers.utils.parseEther(quotedRentalPrice)
+      const buyRentalParams = {
+        tickUpper: position.tickUpper,
+        tickLower: position.tickLower,
+        fee: position.pool.fee,
+        duration: rentalDuration,
+        priceMax: ethers.utils.parseEther(quotedRentalPrice), // add slippage? should let user pick this
+        token0: position.pool.token0.address,
+        token1: position.pool.token1.address,
+        amount0Desired: amount0.toString(),
+        amount1Desired: amount1.toString(),
+        amount0Min: (amount0 * 0.99).toString(),
+        amount1Min: (amount1 * 0.99).toString(),
+        deadline: deadline
+      }
+      console.log(buyRentalParams)
+      console.log("Attempting to purchase rental")
+      const quotedPriceEth = await caravanRentRouter.connect(signer).buyRental(
+        buyRentalParams,
+        { value: quotedPriceInWei, gasLimit: 1e7 }
+      )
+      console.log("Finished purchase rental")
+
+      ReactGA.event({
+        category: 'Liquidity',
+        action: 'Add',
+        label: [currencies[Field.CURRENCY_A]?.symbol, currencies[Field.CURRENCY_B]?.symbol].join('/'),
+      })
       return;
 
     //   const useNative = baseCurrency.isNative ? baseCurrency : quoteCurrency.isNative ? quoteCurrency : undefined
@@ -505,7 +568,8 @@ export default function AddLiquidity({
           )}
         <ButtonError
           onClick={() => {
-            expertMode ? onAdd() : setShowConfirm(true)
+            getQuotedRentalPrice()
+            setShowConfirm(true)
           }}
           disabled={
             !isValid ||
@@ -514,7 +578,7 @@ export default function AddLiquidity({
           }
           error={!isValid && !!parsedAmounts[Field.CURRENCY_A] && !!parsedAmounts[Field.CURRENCY_B]}
         >
-          <Text fontWeight={500}>{errorMessage ? errorMessage : <Trans>Preview deez</Trans>}</Text>
+          <Text fontWeight={500}>{errorMessage ? errorMessage : <Trans>Preview Rental</Trans>}</Text>
         </ButtonError>
       </AutoColumn>
     )
@@ -541,12 +605,13 @@ export default function AddLiquidity({
                   outOfRange={outOfRange}
                   ticksAtLimit={ticksAtLimit}
                   rentalDurationSecs={rentalDuration}
+                  rentalPriceInEth={quotedRentalPrice}
                 />
               )}
               bottomContent={() => (
                 <ButtonPrimary style={{ marginTop: '1rem' }} onClick={onAdd}>
                   <Text fontWeight={500} fontSize={20}>
-                    <Trans>Add deez nuts</Trans>
+                    <Trans>Confirm Rental</Trans>
                   </Text>
                 </ButtonPrimary>
               )}
