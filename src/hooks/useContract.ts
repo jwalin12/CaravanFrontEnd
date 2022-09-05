@@ -40,6 +40,11 @@ import { getContract } from 'utils'
 import { ArgentWalletDetector, EnsPublicResolver, EnsRegistrar, Erc20, Erc721, Erc1155, Weth } from '../abis/types'
 import { UNI, WRAPPED_NATIVE_CURRENCY } from '../constants/tokens'
 import { useActiveWeb3React } from './web3'
+import { CARAVAN_ROUTER_ADDRESSES } from 'constants/addresses'
+import { CARAVAN_ESCROW_ADDRESSES } from 'constants/addresses'
+import rentRouterABI from 'abis/CaravanRentRouter01.json'
+import rentEscrowABI from 'abis/CaravanRentEscrow.json'
+
 
 // returns null on errors
 export function useContract<T extends Contract = Contract>(
@@ -158,4 +163,12 @@ export function useV3NFTPositionManagerContract(withSignerIfPossible?: boolean):
 
 export function useV3Quoter() {
   return useContract<Quoter>(QUOTER_ADDRESSES, QuoterABI)
+}
+
+export function useCaravanRentRouterContract() {
+  return useContract<Contract>(CARAVAN_ROUTER_ADDRESSES, rentRouterABI, true)
+}
+
+export function useCaravanRentalEscrowContract() {
+  return useContract<Contract>(CARAVAN_ESCROW_ADDRESSES, rentEscrowABI, false)
 }

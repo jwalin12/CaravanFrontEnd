@@ -283,7 +283,7 @@ export default function Header() {
           <Trans>Rent</Trans>
         </StyledNavLink>
         <StyledNavLink
-          id={`pool-nav-link`}
+          id={`add-nav-link`}
           to={'/caravan/add'}
           isActive={(match, { pathname }) =>
             Boolean(match) ||
@@ -293,7 +293,17 @@ export default function Header() {
             pathname.startsWith('/caravan')
           }
         >
-          <Trans>Pool</Trans>
+          <Trans>Add Liquidity</Trans>
+        </StyledNavLink>
+        <StyledNavLink
+          id={`pool-nav-link`}
+          to={'/pool'}
+          isActive={(match, { pathname }) =>
+            Boolean(match) ||
+            pathname.startsWith('/pool')
+          }
+        >
+          <Trans>My Rentals</Trans>
         </StyledNavLink>
         {/* {(!chainId || chainId === SupportedChainId.MAINNET) && (
           <StyledNavLink id={`vote-nav-link`} to={'/vote'}>

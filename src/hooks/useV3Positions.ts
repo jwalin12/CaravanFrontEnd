@@ -1,9 +1,9 @@
-import { BigNumber } from 'ethers'
+import { BigNumber, BigNumberish } from 'ethers'
 import { useMemo } from 'react'
 import { CallStateResult, useSingleCallResult, useSingleContractMultipleData } from 'state/multicall/hooks'
 import { PositionDetails } from 'types/position'
 
-import { useV3NFTPositionManagerContract } from './useContract'
+import { useCaravanRentalEscrowContract, useCaravanRentRouterContract, useV3NFTPositionManagerContract } from './useContract'
 
 interface UseV3PositionsResults {
   loading: boolean
@@ -59,6 +59,56 @@ export function useV3PositionFromTokenId(tokenId: BigNumber | undefined): UseV3P
   return {
     loading: position.loading,
     position: position.positions?.[0],
+  }
+}
+
+interface RentInfo {
+  expiryDate: BigNumber
+  originalOwner: string
+  renter: string
+  tokenId: BigNumber
+  uniswapPoolAddress: string
+}
+
+export function useCaravanRentalPositions(account: string | null | undefined): UseV3PositionsResults {
+  const router = useCaravanRentRouterContract()
+  const rentalEscrow = useCaravanRentalEscrowContract()
+
+  const { loading: rentalIdsLoading, result: rentalIdResults } = useSingleCallResult(router, 'getRentalsInProgress')
+  const allRentalIds: (number[] | undefined)[] = rentalIdResults?.[0].map((el: BigNumber) => [el.toNumber()]) ?? [undefined]
+  const rentInfoResults = useSingleContractMultipleData(rentalEscrow, 'tokenIdToRentInfo', allRentalIds)
+  // TODO: filter rentInfoResults to only keep those that have renter == account
+  // TODO: map filtered rentInfoResults to tokenId[] and return useV3PositionsFromTokenIds(tokenIds) 
+
+  const someTokenIdsLoading = useMemo(() => rentInfoResults.some(({ loading }) => loading), [rentInfoResults])
+
+  const filteredRentInfo = useMemo(() => {
+    if (account) {
+      return rentInfoResults
+        .map(({ result }) => result)
+        .filter((result): result is CallStateResult => !!result)
+        .map((result) => {
+          return {
+            expiryDate: result.expiryDate,
+            originalOwner: result.originalOwner,
+            renter: result.renter,
+            tokenId: result.tokenId,
+            uniswapPoolAddress: result.uniswapPoolAddress
+          } as RentInfo
+        })
+        .filter((result) => result.renter === account)
+    }
+    return []
+  }, [account, rentInfoResults])
+
+  const filteredTokenIds = useMemo(() => filteredRentInfo.map((result) => result.tokenId), [filteredRentInfo])
+
+  console.log({filteredRentInfo, filteredTokenIds, account})
+  const { positions, loading: positionsLoading } = useV3PositionsFromTokenIds(filteredTokenIds)
+
+  return {
+    loading: someTokenIdsLoading || rentalIdsLoading || positionsLoading,
+    positions,
   }
 }
 
