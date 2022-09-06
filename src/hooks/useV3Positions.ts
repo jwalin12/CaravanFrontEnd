@@ -54,6 +54,18 @@ interface UseV3PositionResults {
   position: PositionDetails | undefined
 }
 
+export function useCaravanRentInfo(tokenId: BigNumber | undefined): RentInfo | undefined {
+  const rentalEscrow = useCaravanRentalEscrowContract()
+  const { loading, result } = useSingleCallResult(rentalEscrow, 'tokenIdToRentInfo', [tokenId])
+  return result ? {
+    expiryDate: result.expiryDate,
+    originalOwner: result.originalOwner,
+    renter: result.renter,
+    tokenId: result.tokenId,
+    uniswapPoolAddress: result.uniswapPoolAddress
+  } as RentInfo : undefined
+}
+
 export function useV3PositionFromTokenId(tokenId: BigNumber | undefined): UseV3PositionResults {
   const position = useV3PositionsFromTokenIds(tokenId ? [tokenId] : undefined)
   return {
@@ -75,11 +87,8 @@ export function useCaravanRentalPositions(account: string | null | undefined): U
   const rentalEscrow = useCaravanRentalEscrowContract()
 
   const { loading: rentalIdsLoading, result: rentalIdResults } = useSingleCallResult(router, 'getRentalsInProgress')
-  const allRentalIds: (number[] | undefined)[] = rentalIdResults?.[0].map((el: BigNumber) => [el.toNumber()]) ?? [undefined]
+  const allRentalIds: (number[] | undefined)[] = rentalIdResults?.[0].map((el: BigNumber) => [el.toNumber()]) ?? [[undefined]]
   const rentInfoResults = useSingleContractMultipleData(rentalEscrow, 'tokenIdToRentInfo', allRentalIds)
-  // TODO: filter rentInfoResults to only keep those that have renter == account
-  // TODO: map filtered rentInfoResults to tokenId[] and return useV3PositionsFromTokenIds(tokenIds) 
-
   const someTokenIdsLoading = useMemo(() => rentInfoResults.some(({ loading }) => loading), [rentInfoResults])
 
   const filteredRentInfo = useMemo(() => {

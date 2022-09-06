@@ -15,12 +15,12 @@ import TransactionConfirmationModal, { ConfirmationModalContent } from 'componen
 import type { providers } from 'ethers'
 import { BigNumber } from 'ethers'
 import { useToken } from 'hooks/Tokens'
-import { useV3NFTPositionManagerContract } from 'hooks/useContract'
+import { useCaravanRentPlatformContract, useV3NFTPositionManagerContract } from 'hooks/useContract'
 import useIsTickAtLimit from 'hooks/useIsTickAtLimit'
 import { PoolState, usePool } from 'hooks/usePools'
 import useUSDCPrice from 'hooks/useUSDCPrice'
 import { useV3PositionFees } from 'hooks/useV3PositionFees'
-import { useV3PositionFromTokenId } from 'hooks/useV3Positions'
+import { useCaravanRentInfo, useV3PositionFromTokenId } from 'hooks/useV3Positions'
 import { useActiveWeb3React } from 'hooks/web3'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import ReactGA from 'react-ga'
@@ -418,25 +418,15 @@ export function PositionPage({
 
   const addTransaction = useTransactionAdder()
   const positionManager = useV3NFTPositionManagerContract()
+  const rentPlatform = useCaravanRentPlatformContract()
+  const rentInfo = useCaravanRentInfo(tokenId)
   const collect = useCallback(() => {
-    if (!chainId || !feeValue0 || !feeValue1 || !positionManager || !account || !tokenId || !library) return
+    if (!chainId || !feeValue0 || !feeValue1 || !rentPlatform || !account || !tokenId || !library) return
 
     setCollecting(true)
 
-    const { calldata, value } = NonfungiblePositionManager.collectCallParameters({
-      tokenId: tokenId.toString(),
-      expectedCurrencyOwed0: feeValue0,
-      expectedCurrencyOwed1: feeValue1,
-      recipient: account,
-    })
-
-    const txn = {
-      to: positionManager.address,
-      data: calldata,
-      value,
-    }
-
-    library
+    rentPlatform.populateTransaction.collectFeesForRenter(tokenId, 0, 0).then((txn) => {
+      library
       .getSigner()
       .estimateGas(txn)
       .then((estimate) => {
@@ -469,6 +459,7 @@ export function PositionPage({
         setCollecting(false)
         console.error(error)
       })
+    })
   }, [chainId, feeValue0, feeValue1, positionManager, account, tokenId, addTransaction, library])
 
   const owner = useSingleCallResult(!!tokenId ? positionManager : null, 'ownerOf', [tokenId]).result?.[0]
@@ -521,7 +512,7 @@ export function PositionPage({
       (currency0.isNative || currency1.isNative) &&
       !collectMigrationHash
   )
-
+  
   return loading || poolState === PoolState.LOADING || !feeAmount ? (
     <LoadingRows>
       <div />
@@ -709,7 +700,7 @@ export function PositionPage({
                           </ThemedText.LargeHeader>
                         )}
                       </AutoColumn>
-                      {ownsNFT && (feeValue0?.greaterThan(0) || feeValue1?.greaterThan(0) || !!collectMigrationHash) ? (
+                      {(ownsNFT || rentInfo?.renter == account) && (feeValue0?.greaterThan(0) || feeValue1?.greaterThan(0) || !!collectMigrationHash) ? (
                         <ButtonConfirmed
                           disabled={collecting || !!collectMigrationHash}
                           confirmed={!!collectMigrationHash && !isCollectPending}
