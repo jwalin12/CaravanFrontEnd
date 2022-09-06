@@ -57,7 +57,6 @@ export function Countdown({ exactEnd }: { exactEnd?: Date }) {
 
   return (
     <ThemedText.Black fontWeight={400}>
-      {message}{' '}
       {Number.isFinite(timeRemaining) && (
         <code>
           {`${days}:${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds

@@ -2,6 +2,7 @@ import { Trans } from '@lingui/macro'
 import { Currency, CurrencyAmount, Fraction, Percent, Price, Token } from '@uniswap/sdk-core'
 import { NonfungiblePositionManager, Pool, Position } from '@uniswap/v3-sdk'
 import Badge from 'components/Badge'
+import RentalBadge from 'components/Badge/RentalBadge'
 import { ButtonConfirmed, ButtonGray, ButtonPrimary } from 'components/Button'
 import { DarkCard, LightCard } from 'components/Card'
 import { AutoColumn } from 'components/Column'
@@ -34,7 +35,7 @@ import { currencyId } from 'utils/currencyId'
 import { formatCurrencyAmount } from 'utils/formatCurrencyAmount'
 import { formatTickPrice } from 'utils/formatTickPrice'
 import { unwrappedToken } from 'utils/unwrappedToken'
-
+import { Countdown } from 'pages/Earn/Countdown'
 import RangeBadge from '../../components/Badge/RangeBadge'
 import { getPriceOrderingFromPositionForUI } from '../../components/PositionListItem'
 import RateToggle from '../../components/RateToggle'
@@ -512,7 +513,10 @@ export function PositionPage({
       (currency0.isNative || currency1.isNative) &&
       !collectMigrationHash
   )
-  
+
+  const remainingDurationInSeconds = rentInfo ? rentInfo.expiryDate.toNumber() - Math.floor(Date.now() / 1000) : undefined
+  const rentalExpiryDate = rentInfo ? new Date(rentInfo.expiryDate.toNumber() * 1000) : undefined
+
   return loading || poolState === PoolState.LOADING || !feeAmount ? (
     <LoadingRows>
       <div />
@@ -862,6 +866,62 @@ export function PositionPage({
                 currencyQuote={currencyQuote}
                 currencyBase={currencyBase}
               />
+            </AutoColumn>
+          </DarkCard>
+          <DarkCard>
+            <AutoColumn gap="md">
+              <RowBetween>
+                <RowFixed>
+                  <Label display="flex" style={{ marginRight: '12px' }}>
+                    <Trans>Rental Info</Trans>
+                  </Label>
+                  <HideExtraSmall>
+                    <>
+                      <RentalBadge renting={rentInfo?.renter == account} expiryDate={rentInfo?.expiryDate} />
+                      <span style={{ width: '8px' }} />
+                    </>
+                  </HideExtraSmall>
+                </RowFixed>
+                <RowFixed>
+                </RowFixed>
+              </RowBetween>
+
+              <RowBetween>
+                <LightCard padding="12px" width="100%">
+                  <AutoColumn gap="8px" justify="center">
+                    <ExtentsText>
+                      <Trans>Remaining Duration</Trans>
+                    </ExtentsText>
+                    <ThemedText.MediumHeader textAlign="center">
+                      <Countdown exactEnd={rentalExpiryDate}/>
+                    </ThemedText.MediumHeader>
+                    <ExtentsText>
+                      {' '}
+                      <Trans>
+                        {rentalExpiryDate ? rentalExpiryDate.toLocaleString() : ' '}
+                      </Trans>
+                    </ExtentsText>
+
+                    <ThemedText.Small color={theme.text3}>
+                      <Trans>After this date, the rental will become inactive.</Trans>
+                    </ThemedText.Small>
+                  </AutoColumn>
+                </LightCard>
+              </RowBetween>
+              <LightCard padding="12px ">
+                <AutoColumn gap="8px" justify="center">
+                  <ExtentsText>
+                    <Trans>Renter</Trans>
+                  </ExtentsText>
+                  <ThemedText.MediumHeader textAlign="center">
+                    {rentInfo?.renter}
+                  </ThemedText.MediumHeader>
+
+                  <ThemedText.Small color={theme.text3}>
+                    <Trans>Bottom text.</Trans>
+                  </ThemedText.Small>
+                </AutoColumn>
+              </LightCard>
             </AutoColumn>
           </DarkCard>
         </AutoColumn>
